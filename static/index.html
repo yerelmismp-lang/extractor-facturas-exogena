@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extractor de Facturas – Exógena 2025</title>
+  <style>
+    :root {
+      --azul:    #1F3864;
+      --azul2:   #2F5496;
+      --verde:   #2E7D32;
+      --naranja: #E65100;
+      --rojo:    #B71C1C;
+      --bg:      #F0F2F5;
+      --card:    #FFFFFF;
+      --borde:   #DADCE0;
+      --texto:   #212121;
+      --suave:   #757575;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--texto);
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      background: var(--azul);
+      color: #fff;
+      padding: 24px 0 20px;
+      text-align: center;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: .3px; }
+    header p  { font-size: .85rem; color: #9EB5D6; margin-top: 4px; }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .container { max-width: 820px; margin: 0 auto; padding: 28px 20px 60px; }
+
+    .section { display: none; }
+    .section.activo { display: block; }
+
+    /* ── Tarjeta ─────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--borde);
+      border-radius: 10px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Zona de carga ───────────────────────────────────────── */
+    #drop-zone {
+      border: 2.5px dashed var(--azul2);
+      border-radius: 10px;
+      padding: 44px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      background: #F7F9FF;
+    }
+    #drop-zone:hover, #drop-zone.sobre { background: #EEF2FF; border-color: var(--azul); }
+    #drop-zone svg { margin-bottom: 14px; }
+    #drop-zone h2 { font-size: 1.1rem; color: var(--azul); margin-bottom: 6px; }
+    #drop-zone p  { font-size: .85rem; color: var(--suave); }
+    .badges { display: flex; justify-content: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .badge {
+      padding: 3px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600;
+      border: 1px solid; text-transform: uppercase;
+    }
+    .badge.xml  { color: #1565C0; border-color: #1565C0; background: #E3F2FD; }
+    .badge.pdf  { color: #B71C1C; border-color: #B71C1C; background: #FFEBEE; }
+    .badge.img  { color: #1B5E20; border-color: #1B5E20; background: #E8F5E9; }
+
+    #file-input { display: none; }
+
+    /* ── Lista de archivos ───────────────────────────────────── */
+    #lista-archivos {
+      list-style: none;
+      margin-top: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #lista-archivos li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: .88rem;
+      border: 1px solid var(--borde);
+      margin-bottom: 6px;
+      background: #FAFAFA;
+    }
+    #lista-archivos li .icono { font-size: 1.2rem; flex-shrink: 0; }
+    #lista-archivos li .nombre { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #lista-archivos li .tamano { color: var(--suave); font-size: .78rem; white-space: nowrap; }
+    #lista-archivos li .quitar {
+      background: none; border: none; cursor: pointer;
+      color: var(--suave); font-size: 1rem; padding: 0 4px;
+      line-height: 1;
+    }
+    #lista-archivos li .quitar:hover { color: var(--rojo); }
+
+    /* ── Botones ─────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 28px; border-radius: 7px; font-size: 1rem; font-weight: 700;
+      border: none; cursor: pointer; transition: filter .15s, opacity .15s;
+      text-decoration: none;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(.9); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: var(--azul2); color: #fff; }
+    .btn-verde   { background: var(--verde); color: #fff; font-size: 1.1rem; padding: 14px 36px; }
+    .btn-outline {
+      background: transparent; color: var(--azul2);
+      border: 2px solid var(--azul2); font-weight: 600;
+    }
+    .btn-full { width: 100%; margin-top: 20px; }
+    .btn-center { display: flex; justify-content: center; margin-top: 20px; }
+
+    /* ── Procesando ──────────────────────────────────────────── */
+    .spinner-wrap { text-align: center; padding: 40px 0; }
+    .spinner {
+      width: 54px; height: 54px; border: 5px solid #D0D8EE;
+      border-top-color: var(--azul2);
+      border-radius: 50%; animation: spin .8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-wrap h2 { color: var(--azul); font-size: 1.1rem; }
+    .spinner-wrap p  { color: var(--suave); font-size: .88rem; margin-top: 6px; }
+    .dots::after {
+      content: '';
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+    }
+
+    /* ── Estadísticas ────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 540px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--borde);
+      border-radius: 8px;
+      padding: 18px 12px;
+      text-align: center;
+    }
+    .stat-num  { font-size: 2.4rem; font-weight: 800; line-height: 1; }
+    .stat-lbl  { font-size: .78rem; color: var(--suave); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-card.ok     .stat-num { color: var(--verde); }
+    .stat-card.warn   .stat-num { color: var(--naranja); }
+    .stat-card.error  .stat-num { color: var(--rojo); }
+    .stat-card.total  .stat-num { color: var(--azul2); }
+
+    /* ── Totales ─────────────────────────────────────────────── */
+    .totales {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      background: var(--azul); color: #fff;
+      border-radius: 8px; padding: 16px 22px;
+      margin-bottom: 20px;
+    }
+    .totales .item { flex: 1; min-width: 140px; }
+    .totales .item .lbl { font-size: .75rem; color: #9EB5D6; text-transform: uppercase; margin-bottom: 2px; }
+    .totales .item .val { font-size: 1.15rem; font-weight: 700; }
+
+    /* ── Aviso ───────────────────────────────────────────────── */
+    .aviso {
+      padding: 12px 16px; border-radius: 7px; font-size: .88rem;
+      margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    .aviso.warn  { background: #FFF3E0; border: 1px solid #FFB74D; color: #5D2E00; }
+    .aviso.error { background: #FFEBEE; border: 1px solid #EF9A9A; color: #5D0000; }
+    .aviso.ok    { background: #E8F5E9; border: 1px solid #A5D6A7; color: #003300; }
+
+    /* ── Tabla ───────────────────────────────────────────────── */
+    .tabla-wrap {
+      overflow-x: auto; overflow-y: auto;
+      max-height: 340px;
+      border: 1px solid var(--borde);
+      border-radius: 7px;
+      margin-bottom: 16px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    thead th {
+      background: var(--azul); color: #fff;
+      padding: 9px 10px; text-align: left;
+      position: sticky; top: 0; white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--borde); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #F7F9FF; }
+    tbody td { padding: 8px 10px; vertical-align: top; }
+    tbody td.derecha { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .chip {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: .72rem; font-weight: 700; white-space: nowrap;
+    }
+    .chip.ok     { background: #E8F5E9; color: var(--verde); }
+    .chip.warn   { background: #FFF3E0; color: var(--naranja); }
+    .chip.error  { background: #FFEBEE; color: var(--rojo); }
+    .chip.revisar{ background: #FFF8E1; color: #E65100; }
+
+    .fila-warn  { background: #FFFDE7 !important; }
+    .fila-error { background: #FFEBEE !important; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    footer {
+      text-align: center; font-size: .78rem; color: var(--suave);
+      padding: 20px 0; border-top: 1px solid var(--borde);
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Extractor de Facturas</h1>
+  <p>Información Exógena 2025 &nbsp;·&nbsp; Formato 1001 &nbsp;·&nbsp; Persona Natural</p>
+</header>
+
+<div class="container">
+
+  <!-- ── SECCIÓN 1: Subir archivos ─────────────────────────── -->
+  <div id="sec-upload" class="section activo">
+    <div class="card">
+      <div id="drop-zone" role="button" tabindex="0"
+           onclick="document.getElementById('file-input').click()"
+           onkeydown="if(event.key==='Enter')this.click()">
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+          <circle cx="26" cy="26" r="26" fill="#EEF2FF"/>
+          <path d="M26 34V22M26 22L21 27M26 22L31 27" stroke="#2F5496" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 36h20" stroke="#2F5496" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h2>Arrastre las facturas aquí</h2>
+        <p>o haga clic para seleccionarlas desde su computador</p>
+        <div class="badges">
+          <span class="badge xml">XML</span>
+          <span class="badge pdf">PDF</span>
+          <span class="badge img">JPG</span>
+          <span class="badge img">PNG</span>
+          <span class="badge img">BMP</span>
+          <span class="badge img">TIFF</span>
+        </div>
+      </div>
+      <input type="file" id="file-input" multiple
+             accept=".pdf,.xml,.jpg,.jpeg,.png,.bmp,.tiff,.tif" />
+
+      <ul id="lista-archivos"></ul>
+    </div>
+
+    <div id="error-upload" class="aviso error" style="display:none"></div>
+
+    <button id="btn-procesar" class="btn btn-primary btn-full" disabled onclick="procesar()">
+      Procesar Facturas
+    </button>
+    <p style="text-align:center;color:var(--suave);font-size:.8rem;margin-top:10px;">
+      Los archivos se procesan en el servidor y se eliminan inmediatamente. No quedan guardados.
+    </p>
+  </div>
+
+  <!-- ── SECCIÓN 2: Procesando ─────────────────────────────── -->
+  <div id="sec-procesando" class="section">
+    <div class="card">
+      <div class="spinner-wrap">
+        <div class="spinner"></div>
+        <h2>Procesando las facturas<span class="dots"></span></h2>
+        <p id="msg-procesando">Esto puede tardar unos segundos</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECCIÓN 3: Resultados ─────────────────────────────── -->
+  <div id="sec-resultados" class="section">
+
+    <div id="aviso-resultado" class="aviso ok" style="margin-bottom:20px;">
+      ✔ Procesamiento completado
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="stats-grid">
+      <div class="stat-card total">
+        <div class="stat-num" id="st-total">0</div>
+        <div class="stat-lbl">Procesadas</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="stat-num" id="st-ok">0</div>
+        <div class="stat-lbl">Correctas</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="stat-num" id="st-revisar">0</div>
+        <div class="stat-lbl">Revisar</div>
+      </div>
+      <div class="stat-card error">
+        <div class="stat-num" id="st-error">0</div>
+        <div class="stat-lbl">Errores</div>
+      </div>
+    </div>
+
+    <!-- Totales -->
+    <div class="totales">
+      <div class="item">
+        <div class="lbl">Base (sin IVA)</div>
+        <div class="val" id="tot-base">$0</div>
+      </div>
+      <div class="item">
+        <div class="lbl">IVA</div>
+        <div class="val" id="tot-iva">$0</div>
+      </div>
+      <div class="item">
+        <div class="lbl">Total facturas</div>
+        <div class="val" id="tot-valor">$0</div>
+      </div>
+    </div>
+
+    <!-- Descargar -->
+    <div class="btn-center">
+      <button id="btn-descargar" class="btn btn-verde" onclick="descargar()">
+        ⬇&nbsp; Descargar Excel (Formato 1001)
+      </button>
+    </div>
+
+    <p style="text-align:center;color:var(--suave);font-size:.8rem;margin-top:8px;margin-bottom:20px;">
+      El archivo tiene 4 hojas: Formato 1001 · Resumen · Pendientes · Instrucciones
+    </p>
+
+    <!-- Aviso si hay items a revisar -->
+    <div id="aviso-revisar" class="aviso warn" style="display:none">
+      ⚠ Algunas facturas necesitan revisión manual.<br/>
+      Abra el Excel y complete los datos en la hoja <strong>Pendientes Revisión</strong> (filas en naranja/rojo).
+    </div>
+
+    <!-- Tabla de registros -->
+    <div class="tabla-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Proveedor</th>
+            <th>NIT</th>
+            <th>Fecha</th>
+            <th>Total</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Procesar nuevas -->
+    <div class="btn-center">
+      <button class="btn btn-outline" onclick="reiniciar()">
+        ↩ Procesar nuevas facturas
+      </button>
+    </div>
+  </div>
+
+</div><!-- container -->
+
+<footer>
+  Extractor de Facturas · Exógena 2025 · Solo declara renta · Retenciones en cero
+</footer>
+
+<script>
+  // ── Estado ─────────────────────────────────────────────────
+  let archivos = [];
+  let tokenDescarga = null;
+
+  const EXTS_VALIDAS = new Set([".pdf",".xml",".jpg",".jpeg",".png",".bmp",".tiff",".tif"]);
+
+  // ── DOM refs ────────────────────────────────────────────────
+  const dropZone   = document.getElementById("drop-zone");
+  const fileInput  = document.getElementById("file-input");
+  const listaEl    = document.getElementById("lista-archivos");
+  const btnProc    = document.getElementById("btn-procesar");
+  const errUpload  = document.getElementById("error-upload");
+
+  // ── Drag & Drop ─────────────────────────────────────────────
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("sobre"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("sobre"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("sobre");
+    agregarArchivos([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener("change", () => {
+    agregarArchivos([...fileInput.files]);
+    fileInput.value = "";
+  });
+
+  function agregarArchivos(nuevos) {
+    const validos = nuevos.filter(f => {
+      const ext = f.name.substring(f.name.lastIndexOf(".")).toLowerCase();
+      return EXTS_VALIDAS.has(ext);
+    });
+    if (validos.length < nuevos.length) {
+      mostrarError(`${nuevos.length - validos.length} archivo(s) ignorados. Solo se aceptan PDF, XML, JPG, PNG, BMP, TIFF.`);
+    } else {
+      ocultarError();
+    }
+    // Evitar duplicados por nombre
+    const nombresActuales = new Set(archivos.map(f => f.name));
+    validos.forEach(f => { if (!nombresActuales.has(f.name)) archivos.push(f); });
+    renderLista();
+  }
+
+  function quitarArchivo(idx) {
+    archivos.splice(idx, 1);
+    renderLista();
+  }
+
+  function renderLista() {
+    listaEl.innerHTML = "";
+    archivos.forEach((f, i) => {
+      const ext = f.name.substring(f.name.lastIndexOf(".") + 1).toLowerCase();
+      const icono = ext === "xml" ? "📋" : ext === "pdf" ? "📄" : "🖼️";
+      const kb = f.size < 1024
+        ? f.size + " B"
+        : f.size < 1024 * 1024
+          ? (f.size / 1024).toFixed(0) + " KB"
+          : (f.size / 1024 / 1024).toFixed(1) + " MB";
+
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="icono">${icono}</span>
+        <span class="nombre">${f.name}</span>
+        <span class="tamano">${kb}</span>
+        <button class="quitar" title="Quitar" onclick="quitarArchivo(${i})">✕</button>
+      `;
+      listaEl.appendChild(li);
+    });
+    btnProc.disabled = archivos.length === 0;
+  }
+
+  // ── Procesar ────────────────────────────────────────────────
+  async function procesar() {
+    if (!archivos.length) return;
+    ocultarError();
+    mostrarSeccion("sec-procesando");
+
+    const fd = new FormData();
+    archivos.forEach(f => fd.append("archivos", f));
+
+    try {
+      const res = await fetch("/procesar", { method: "POST", body: fd });
+      const data = await res.json();
+
+      if (!res.ok) {
+        mostrarSeccion("sec-upload");
+        mostrarError(data.detail || "Error en el servidor.");
+        return;
+      }
+
+      tokenDescarga = data.token;
+      mostrarResultados(data);
+    } catch (err) {
+      mostrarSeccion("sec-upload");
+      mostrarError("No se pudo conectar con el servidor. Verifique su conexión.");
+    }
+  }
+
+  // ── Mostrar resultados ──────────────────────────────────────
+  function mostrarResultados(data) {
+    const { stats, registros } = data;
+
+    // Stats cards
+    document.getElementById("st-total").textContent   = stats.total;
+    document.getElementById("st-ok").textContent      = stats.ok;
+    document.getElementById("st-revisar").textContent = stats.revisar;
+    document.getElementById("st-error").textContent   = stats.error;
+
+    // Totales
+    document.getElementById("tot-base").textContent  = cop(stats.base);
+    document.getElementById("tot-iva").textContent   = cop(stats.iva);
+    document.getElementById("tot-valor").textContent = cop(stats.valor);
+
+    // Aviso principal
+    const aviso = document.getElementById("aviso-resultado");
+    if (stats.error > 0) {
+      aviso.className = "aviso warn";
+      aviso.textContent = `⚠ ${stats.total} facturas procesadas · ${stats.error} con errores`;
+    } else if (stats.revisar > 0) {
+      aviso.className = "aviso warn";
+      aviso.textContent = `⚠ ${stats.total} facturas procesadas · ${stats.revisar} requieren revisión`;
+    } else {
+      aviso.className = "aviso ok";
+      aviso.textContent = `✔ ${stats.total} facturas procesadas correctamente`;
+    }
+
+    // Aviso revisar
+    document.getElementById("aviso-revisar").style.display =
+      (stats.revisar > 0 || stats.error > 0) ? "flex" : "none";
+
+    // Tabla
+    const tbody = document.getElementById("tabla-body");
+    tbody.innerHTML = "";
+    registros.forEach(r => {
+      const conf = r.confianza || "";
+      let chipClass = "ok", filaClass = "";
+      if (conf === "Error")                filaClass = "fila-error", chipClass = "error";
+      else if (conf === "Baja")            filaClass = "fila-warn",  chipClass = "warn";
+      else if (conf === "Revisar")         filaClass = "fila-warn",  chipClass = "revisar";
+
+      const tr = document.createElement("tr");
+      if (filaClass) tr.className = filaClass;
+      tr.innerHTML = `
+        <td style="white-space:nowrap;font-size:.78rem;color:var(--suave)">${r.archivo}</td>
+        <td>${r.proveedor || "<em style='color:var(--suave)'>—</em>"}</td>
+        <td style="white-space:nowrap">${r.nit || "—"}</td>
+        <td style="white-space:nowrap">${r.fecha || "—"}</td>
+        <td class="derecha">${r.total ? cop(r.total) : "—"}</td>
+        <td><span class="chip ${chipClass}">${conf || "—"}</span>
+            ${r.error ? `<br/><span style="font-size:.72rem;color:var(--suave)">${r.error}</span>` : ""}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    mostrarSeccion("sec-resultados");
+  }
+
+  // ── Descargar Excel ─────────────────────────────────────────
+  function descargar() {
+    if (!tokenDescarga) return;
+    window.location.href = `/descargar/${tokenDescarga}`;
+  }
+
+  // ── Reiniciar ───────────────────────────────────────────────
+  function reiniciar() {
+    archivos = [];
+    tokenDescarga = null;
+    renderLista();
+    ocultarError();
+    mostrarSeccion("sec-upload");
+  }
+
+  // ── Utilidades ──────────────────────────────────────────────
+  function mostrarSeccion(id) {
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("activo"));
+    document.getElementById(id).classList.add("activo");
+  }
+
+  function mostrarError(msg) {
+    errUpload.style.display = "flex";
+    errUpload.textContent = "⚠ " + msg;
+  }
+  function ocultarError() {
+    errUpload.style.display = "none";
+  }
+
+  const _fmt = new Intl.NumberFormat("es-CO", {
+    style: "currency", currency: "COP", minimumFractionDigits: 0, maximumFractionDigits: 0
+  });
+  function cop(n) { return _fmt.format(n || 0); }
+</script>
+
+</body>
+</html>
